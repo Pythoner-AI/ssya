@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+    <title>生日快乐</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            font-family:'Microsoft YaHei',sans-serif;
+            background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+            overflow:hidden;height:100vh;
+            position:relative
+        }
+        #wrapper{width:100vw;height:100vh;position:relative}
+        #background{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+
+        /* 背景元素样式 */
+        .star{position:absolute;background:white;border-radius:50%;animation:twinkle 3s infinite ease-in-out}
+        .birthday-element{position:absolute;animation:float 20s infinite linear}
+        .birthday-text{
+            position:absolute;white-space:nowrap;
+            font-weight:bold;color:#ff4081;text-shadow:0 0 10px currentColor;
+            animation:bounce 2s infinite ease-in-out
+        }
+
+        @keyframes twinkle{0%,100%{opacity:.2}50%{opacity:1}}
+        @keyframes float{0%{transform:translateY(100vh) rotate(0deg)}100%{transform:translateY(-100px) rotate(360deg)}}
+        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
+
+        /* 主窗口样式 */
+        #firstWindow{
+            position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+            width:80vw;max-width:320px;height:35vh;
+            background:linear-gradient(145deg,rgba(255,105,180,.9),rgba(255,182,193,.9));
+            border:3px solid white;border-radius:20px;
+            display:flex;flex-direction:column;justify-content:center;align-items:center;
+            z-index:1000
+        }
+        #firstWindow h1{color:white;font-size:26px;margin-bottom:10px}
+        #startBtn{
+            padding:12px 30px;
+            background:linear-gradient(45deg,#32CD32,#90EE90);
+            border:2px solid white;border-radius:25px;
+            color:white;font-size:16px;font-weight:bold;
+            cursor:pointer
+        }
+
+        /* 提示窗口 */
+        .tip-window{
+            position:absolute;white-space:nowrap;
+            background:linear-gradient(135deg,var(--bg-color),var(--bg-light));
+            border:2px solid white;border-radius:12px;
+            padding:8px 12px;
+            display:flex;align-items:center;justify-content:center;
+            animation:fadeIn .5s;
+            z-index:10; /* 确保窗口在背景元素上方 */
+        }
+        @keyframes fadeIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+
+        /* 颜色定义 */
+        .color-1{--bg-color:#ff9a9e;--bg-light:#fad0c4}
+        .color-2{--bg-color:#a1c4fd;--bg-light:#c2e9fb}
+        .color-3{--bg-color:#84fab0;--bg-light:#8fd3f4}
+        .color-4{--bg-color:#ffecd2;--bg-light:#fcb69f}
+        .color-5{--bg-color:#fbc2eb;--bg-light:#a6c1ee}
+
+        /* 加载提示 */
+        #loadingTip{
+            position:absolute;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,.8);color:white;
+            display:flex;flex-direction:column;justify-content:center;align-items:center;
+            z-index:9999
+        }
+        .loader{width:48px;height:48px;border:5px solid #fff;border-bottom-color:#ff4081;border-radius:50%;animation:rotation 1s linear infinite;margin-bottom:20px}
+        @keyframes rotation{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+        /* 响应式适配 */
+        @media screen and (max-width:768px){
+            .tip-window{font-size:14px;padding:10px 15px}
+            .birthday-text{font-size:5vw;margin:0 5px}
+            #audioCtrl{position:absolute;bottom:15px;left:50%;transform:translateX(-50%);z-index:999}
+        }
+        @media screen and (min-width:769px){
+            #audioCtrl{display:none} /* 电脑端隐藏音频控件 */
+        }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <div id="loadingTip"><div class="loader"></div><p>准备中...</p></div>
+        <div id="background"></div>
+        <div id="firstWindow">
+            <h1>oi！派大星</h1>
+            <button id="startBtn">开始惊喜</button>
+        </div>
+        <!-- 音频控件（移动端显示） -->
+        <div id="audioCtrl" style="display:none">
+            <audio id="m" loop preload="metadata">
+                <!-- 主音频源 -->
+                <source src="生日歌.mp3" type="audio/mp3">
+            </audio>
+        </div>
+    </div>
+
+    <script>
+        // 核心数据
+        const tips = ['多喝水哦~','保持微笑呀','每天元气满满','记得吃水果','保持好心情','好好爱自己','心想事成','梦想成真','天天向上','顺顺利利','早点休息','别熬夜','开心每一天','天冷加衣','晚安'];
+        const colorClasses = ['color-1','color-2','color-3','color-4','color-5'];
+        const birthdayColors = ['#ff4081','#ff9800','#4caf50','#2196f3','#9c27b0'];
+        const birthdayTexts = ['生日快乐','Happy Birthday','生日大快乐','天天开心'];
+
+        // DOM元素
+        const elements = ['m','loadingTip','firstWindow','startBtn','background','wrapper','audioCtrl']
+            .reduce((obj, id) => {
+                obj[id] = document.getElementById(id);
+                return obj;
+            }, {});
+        const {m, loadingTip, firstWindow, startBtn, background, wrapper, audioCtrl} = elements;
+
+        const isMobile = window.innerWidth < 768;
+        let windows = [], currentTipIndex = 0, isAudioPlaying = false;
+
+        // 配置参数 - 优化窗口布局
+        const config = {
+            gap: isMobile ? 40 : 50,  // 增大移动端间距
+            tipFontSize: isMobile ? '14px' : '16px',
+            starCount: isMobile ? 40 : 80,
+            floatCount: isMobile ? 3 : 8,
+            totalWindows: 100,  // 改为100个窗口
+            interval: isMobile ? 1000 : 600,  // 减慢创建速度，降低重叠概率
+            maxAttempts: 200  // 增加位置查找尝试次数
+        };
+
+        // 初始化
+        window.onload = () => {
+            if (isMobile) audioCtrl.style.display = 'block';
+            setTimeout(createStars, 100);
+            setTimeout(createFloatElements, 300);
+            setTimeout(createBirthdayTexts, 500);
+            bindAudioEvents();
+
+            setTimeout(() => {
+                loadingTip.style.transition = 'opacity 0.5s ease';
+                loadingTip.style.opacity = 0;
+                setTimeout(() => loadingTip.style.display = 'none', 500);
+            }, 1000);
+        };
+
+        // 音频事件处理
+        function bindAudioEvents() {
+            const playAudio = () => {
+                if (!isAudioPlaying) {
+                    m.muted = false;
+                    m.volume = isMobile ? 0.8 : 1;
+                    m.play().then(() => {
+                        isAudioPlaying = true;
+                        if (isMobile) audioCtrl.style.opacity = 0.3;
+                    }).catch(err => {
+                        console.log('音频播放失败:', err);
+                        if (isMobile) audioCtrl.style.opacity = 1;
+                    });
+                }
+                document.removeEventListener('click', playAudio);
+                document.removeEventListener('touchstart', playAudio);
+            };
+
+            document.addEventListener('click', playAudio);
+            document.addEventListener('touchstart', playAudio, {passive: true});
+            startBtn.addEventListener('click', playAudio);
+        }
+
+        // 创建星星背景
+        function createStars() {
+            for (let i = 0; i < config.starCount; i++) {
+                const star = document.createElement('div');
+                const size = Math.random() * 2 + 1;
+                star.className = 'star';
+                star.style.cssText = `
+                    width:${size}px;height:${size}px;
+                    left:${Math.random()*100}%;top:${Math.random()*100}%;
+                    animation-delay:${Math.random()*3}s
+                `;
+                background.appendChild(star);
+            }
+        }
+
+        // 创建漂浮元素
+        function createFloatElements() {
+            ['🎈','🎁','🎂'].forEach((emoji, i) => {
+                for (let j = 0; j < config.floatCount; j++) {
+                    const el = document.createElement('div');
+                    el.className = 'birthday-element';
+                    el.innerHTML = emoji;
+                    el.style.cssText = `
+                        font-size:${isMobile ? 18+i*2 : 25+i*5}px;
+                        color:${birthdayColors[Math.floor(Math.random()*birthdayColors.length)]};
+                        left:${Math.random()*100}%;
+                        animation-delay:${Math.random()*20}s
+                    `;
+                    background.appendChild(el);
+                }
+            });
+        }
+
+        // 创建生日文字（防重叠）
+        function createBirthdayTexts() {
+            const containerWidth = window.innerWidth;
+            const textPositions = [];
+
+            birthdayTexts.forEach((text, i) => {
+                const el = document.createElement('div');
+                el.className = 'birthday-text';
+                el.textContent = text;
+                el.style.fontSize = isMobile ? '5vw' : '28px';
+                el.style.color = birthdayColors[i % birthdayColors.length];
+                el.style.animationDelay = `${i * 0.3}s`;
+
+                document.body.appendChild(el);
+                const textWidth = el.offsetWidth;
+                document.body.removeChild(el);
+
+                let leftPos, attempts = 0, valid = false;
+                while (!valid && attempts < 20) {
+                    leftPos = Math.max(20, Math.random() * (containerWidth - textWidth - 40));
+                    valid = textPositions.every(pos =>
+                        leftPos + textWidth < pos.left || leftPos > pos.left + pos.width
+                    );
+                    attempts++;
+                }
+
+                textPositions.push({left: leftPos, width: textWidth});
+                el.style.left = `${leftPos}px`;
+                el.style.top = `${15 + i * 18}%`;
+                background.appendChild(el);
+            });
+        }
+
+        // 开始按钮事件
+        startBtn.onclick = () => {
+            firstWindow.style.display = 'none';
+            // 分批次创建100个窗口，每批10个，减轻性能压力
+            for (let batch = 0; batch < 10; batch++) {
+                for (let i = 0; i < 10; i++) {
+                    const delay = (batch * 10 + i) * config.interval;
+                    setTimeout(createWindow, delay);
+                }
+            }
+        };
+
+        // 窗口位置验证（增强版）
+        function validPos(x, y, width, height) {
+            const {innerWidth: w, innerHeight: h} = window;
+            // 边界检查更严格
+            if (x < 20 || y < 20 || x + width > w - 20 || y + height > h - 20)
+                return false;
+
+            // 与所有已有窗口保持距离
+            return windows.every(win => {
+                const r = win.getBoundingClientRect();
+                // 增加距离阈值，避免边缘重叠
+                return Math.hypot(x - r.left, y - r.top) > (width + config.gap) * 0.9;
+            });
+        }
+
+        // 获取窗口位置（优化算法）
+        function getPos(width, height) {
+            const {innerWidth: w, innerHeight: h} = window;
+            let attempts = 0;
+
+            // 先尝试在空白区域创建
+            while (attempts++ < config.maxAttempts) {
+                // 分区域随机，避免集中在中心
+                let region = Math.floor(Math.random() * 4);
+                let x, y;
+
+                // 按区域生成位置，分散窗口
+                switch(region) {
+                    case 0: // 左上
+                        x = 20 + Math.random() * (w/2 - width - 40);
+                        y = 20 + Math.random() * (h/2 - height - 40);
+                        break;
+                    case 1: // 右上
+                        x = w/2 + Math.random() * (w/2 - width - 40);
+                        y = 20 + Math.random() * (h/2 - height - 40);
+                        break;
+                    case 2: // 左下
+                        x = 20 + Math.random() * (w/2 - width - 40);
+                        y = h/2 + Math.random() * (h/2 - height - 40);
+                        break;
+                    case 3: // 右下
+                        x = w/2 + Math.random() * (w/2 - width - 40);
+                        y = h/2 + Math.random() * (h/2 - height - 40);
+                        break;
+                }
+
+                if (validPos(x, y, width, height)) return {x, y};
+            }
+
+            // 多次尝试失败后，强制放在最边缘
+            return {
+                x: Math.min(20 + Math.random() * (w - width - 40), w - width - 20),
+                y: Math.min(20 + Math.random() * (h - height - 40), h - height - 20)
+            };
+        }
+
+        // 创建提示窗口
+        function createWindow() {
+            if (currentTipIndex >= tips.length) currentTipIndex = 0;
+            const tipText = tips[currentTipIndex];
+
+            // 计算窗口尺寸
+            const tempWin = document.createElement('div');
+            tempWin.className = 'tip-window';
+            tempWin.style.visibility = 'hidden';
+            tempWin.style.fontSize = config.tipFontSize;
+            tempWin.innerHTML = `<div style="color:#333;font-weight:bold;">${tipText}</div>`;
+            document.body.appendChild(tempWin);
+
+            const width = tempWin.offsetWidth;
+            const height = tempWin.offsetHeight;
+            document.body.removeChild(tempWin);
+
+            // 获取位置并创建窗口
+            const {x, y} = getPos(width, height);
+            const win = document.createElement('div');
+            win.className = `tip-window ${colorClasses[Math.floor(Math.random()*colorClasses.length)]}`;
+            win.style.left = `${x}px`;
+            win.style.top = `${y}px`;
+            win.style.fontSize = config.tipFontSize;
+            win.innerHTML = `<div style="color:#333;font-weight:bold;">${tipText}</div>`;
+            wrapper.appendChild(win);
+            windows.push(win);
+
+            currentTipIndex++;
+        }
+
+        // 错误捕获
+        window.addEventListener('error', (e) => {
+            console.error('页面错误:', e);
+            loadingTip.style.opacity = 0;
+            setTimeout(() => loadingTip.style.display = 'none', 500);
+        });
+    </script>
+</body>
+</html>
